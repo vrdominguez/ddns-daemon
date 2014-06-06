@@ -1,0 +1,20 @@
+##
+# Log levels: 50 or CRITICAL, 40 or ERROR, 30 or WARNING, 20 or INFO, 10 or DEBUG
+# Use 0 or NOTSET for disable logs
+## 
+log_level: 10
+
+#ip service
+ip_service: Jsonip
+
+# time between checks (in seconds)
+time_sleep: 600 
+
+zones:
+  - domain: example.com
+    zones:
+      - zone: subdomain
+        type: A
+      - zone: ipvs 
+        type: AAAA
+    service: MyDNSService 
