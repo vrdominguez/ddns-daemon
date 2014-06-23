@@ -18,3 +18,8 @@ zones:
       - zone: ipvs 
         type: AAAA
     service: MyDNSService 
+
+services:
+  dinaip:
+    user: dh_user 
+    password: dh_password 

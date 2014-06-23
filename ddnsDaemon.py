@@ -5,9 +5,9 @@ from daemon import runner #pip install python-daemon
 # add paths for base and command objects
 app_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
 sys.path.append(app_dir + '/base')
-sys.path.append(app_dir + '/commands')
+sys.path.append(app_dir + '/updaters')
 
-from Command import Command, CommandRunner
+from Zone import ZoneUpdater, ZoneUpdateRunner
 
 class DaemonDDNS:
 	def __init__(self): 
@@ -23,8 +23,8 @@ class DaemonDDNS:
 		self.running = 1
 		
 		# Instance public ip getter
-		ip_service = Command().loadConfig('ip_service')
-		sleep_time = Command().loadConfig('time_sleep')
+		ip_service = ZoneUpdater().loadConfig('ip_service')
+		sleep_time = ZoneUpdater().loadConfig('time_sleep')
 		
 		try:
 			module = __import__('Publicip')
@@ -37,22 +37,31 @@ class DaemonDDNS:
 	
 		while True:
 			# Read zone list on each pass in order to get new zones added to the config file
-			zone_list= Command().loadConfig('zones')
-			logger.debug(zone_list)
+			zone_list= ZoneUpdater().loadConfig('zones')
 			
 			current_ip = self.public_ip.getIp()
-			logger.debug("Public IP is: " + str(current_ip))
 			
 			for zone_data in zone_list:
 				for zone in zone_data['zones']:
 					ips = self.getZone(zone_data['domain'], zone['zone'], zone['type'])
-					logger.debug(zone['zone']+'.'+zone_data['domain'] + ' has ips: ' + ','.join(ips))
+					
+					if len(ips):
+						logger.debug(zone['zone']+'.'+zone_data['domain'] + ' has ips: ' + ','.join(ips))
+					else:
+						logger.warning(zone['zone']+'.'+zone_data['domain'] + ' is not defined on your dns client.') 
 					
 					if current_ip in ips:
 						logger.debug('No updates needed')
 					else:
 						logger.debug('Updating zone ' + zone['zone']+'.'+zone_data['domain'] + '...')
-						#TODO: Update zones
+						zone_update_data= { 'zone': zone['zone'], 'domain': zone_data['domain'], 'type': zone['type'], 'ip': current_ip}
+						try:
+							zone_updater = ZoneUpdateRunner(zone_data['service'])
+							zone_updater.instance()
+							response = zone_updater.launchUpdate(zone_update_data)
+							logger.debug("Response from " + zone_data['service'] + " updater: " + response)
+						except Exception as e:
+							logger.error("Error updating '" + zone_update_data['zone'] +'.' + zone_update_data['domain'] + "' using " + zone_data['service']  + " service: " + str(e))
 						
 			
 			logger.debug('Sleeping for ' + str(sleep_time) + ' seconds...')
@@ -62,7 +71,18 @@ class DaemonDDNS:
 		zone_resolution = []
 		
 		query_zone = zone +'.'+domain
-		answers = dns.resolver.query(query_zone, ztype)
+		
+		answers = []
+		
+		try:
+			answers = dns.resolver.query(query_zone, ztype)
+		except Exception as e:
+			if not len(str(e)):
+				logger.debug("Zone not defined in your conection's dns server")
+			else:
+				logger.error("Error getting zones: " + str(e)) 
+				
+		
 		for rdata in answers:
 			zone_resolution.append(str(rdata))
 		
@@ -74,7 +94,7 @@ class DaemonDDNS:
 			logger.info('Daemon finished')
 
 # Get log_level configuration
-log_level = Command().loadConfig('log_level')
+log_level = ZoneUpdater().loadConfig('log_level')
 if not (log_level.isdigit()):
 	log_level = eval('logging.'+log_level)
 
