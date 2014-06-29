@@ -8,6 +8,7 @@ sys.path.append(app_dir + '/base')
 sys.path.append(app_dir + '/updaters')
 
 from Zone import ZoneUpdater, ZoneUpdateRunner
+from Configuration import Configuration 
 
 class DaemonDDNS:
 	def __init__(self): 
@@ -23,8 +24,8 @@ class DaemonDDNS:
 		self.running = 1
 		
 		# Instance public ip getter
-		ip_service = ZoneUpdater().loadConfig('ip_service')
-		sleep_time = ZoneUpdater().loadConfig('time_sleep')
+		ip_service = Configuration().loadConfig('ip_service')
+		sleep_time = Configuration().loadConfig('time_sleep')
 		
 		try:
 			module = __import__('Publicip')
@@ -37,7 +38,7 @@ class DaemonDDNS:
 	
 		while True:
 			# Read zone list on each pass in order to get new zones added to the config file
-			zone_list= ZoneUpdater().loadConfig('zones')
+			zone_list= Configuration().loadConfig('zones')
 			
 			current_ip = self.public_ip.getIp()
 			
@@ -94,7 +95,7 @@ class DaemonDDNS:
 			logger.info('Daemon finished')
 
 # Get log_level configuration
-log_level = ZoneUpdater().loadConfig('log_level')
+log_level = Configuration().loadConfig('log_level')
 if not (log_level.isdigit()):
 	log_level = eval('logging.'+log_level)
 
