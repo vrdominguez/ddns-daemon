@@ -12,12 +12,12 @@ time_sleep: 600
 
 zones:
   - domain: example.com
+    service: dinaip 
     zones:
       - zone: subdomain
         type: A
       - zone: ipvs 
         type: AAAA
-    service: MyDNSService 
 
 services:
   dinaip:

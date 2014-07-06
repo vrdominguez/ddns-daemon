@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import logging, time, os, sys, dns.resolver
+import logging, time, os, signal, sys, dns.resolver
 from daemon import runner #pip install python-daemon
 
 # add paths for base and command objects
@@ -11,7 +11,8 @@ from Zone import ZoneUpdater, ZoneUpdateRunner
 from Configuration import Configuration 
 
 class DaemonDDNS:
-	def __init__(self): 
+	def __init__(self,config): 
+		self.config = config
 		self.stdin_path = '/dev/null'
 		self.stdout_path = '/dev/null'
 		self.stderr_path = '/dev/null'
@@ -19,60 +20,85 @@ class DaemonDDNS:
 		self.pidfile_timeout = 5
 		self.running = 0
 	
+	def reloadConfigFile(self, signum, frame):
+		old_configuration = self.config
+		try:
+			# Instance new configuration object
+			self.config = Configuration() 
+			
+			# Set new log level
+			log_level = self.config.getConfigValue('log_level')
+			if not (log_level.isdigit()):
+				log_level = eval('logging.'+log_level)
+			
+			logger.setLevel(log_level)
+			
+			logger.info("Config reloaded correctly"); 
+		except Exception as e:
+			self.config = old_configuration
+			logger.error("Error reloading configuration " + str(e))
+			logger.info("Damemon keeps working with previous configuration")
+	
 	def run(self):
 		logger.info("ddnsDaemon started!")
 		self.running = 1
 		
-		# Instance public ip getter
-		ip_service = Configuration().loadConfig('ip_service')
-		sleep_time = Configuration().loadConfig('time_sleep')
+		# Signal control for config reload
+		signal.signal(signal.SIGHUP, self.reloadConfigFile)
 		
+		# Instance public ip getter
 		try:
 			module = __import__('Publicip')
-			class_ = getattr(module, ip_service)
+			class_ = getattr(module, self.config.getConfigValue('ip_service'))
 			self.public_ip = class_()
 		except Exception as e:
 			self.running = 0
-			logger.error("Error loading ip getter for " + ip_service  + ". ddnsDaemon finished!")
+			logger.error("Error loading ip getter for " 
+			     + self.config.getConfigValue('ip_service')
+			     + ". ddnsDaemon finished!")
 			sys.exit(1)
 	
 		while True:
-			# Read zone list on each pass in order to get new zones added to the config file
-			zone_list= Configuration().loadConfig('zones')
-			
 			current_ip = self.public_ip.getIp()
 			
-			for zone_data in zone_list:
+			for zone_data in self.config.getConfigValue('zones'):
 				for zone in zone_data['zones']:
 					ips = self.getZone(zone_data['domain'], zone['zone'], zone['type'])
 					
 					if len(ips):
-						logger.debug(zone['zone']+'.'+zone_data['domain'] + ' has ips: ' + ','.join(ips))
+						logger.debug(zone['zone']
+							+'.'+zone_data['domain']
+							+ ' has ips: ' + ','.join(ips))
 					else:
-						logger.warning(zone['zone']+'.'+zone_data['domain'] + ' is not defined on your dns client.') 
+						logger.warning(zone['zone']+'.'+zone_data['domain']
+							+ ' is not defined on your dns client.') 
 					
 					if current_ip in ips:
 						logger.debug('No updates needed')
 					else:
-						logger.debug('Updating zone ' + zone['zone']+'.'+zone_data['domain'] + '...')
-						zone_update_data= { 'zone': zone['zone'], 'domain': zone_data['domain'], 'type': zone['type'], 'ip': current_ip}
+						logger.debug('Updating zone '+ zone['zone']
+							+'.'+zone_data['domain'] + '...')
+						zone_update_data= { 'zone': zone['zone'], 'domain': zone_data['domain'],
+							'type': zone['type'], 'ip': current_ip}
 						try:
 							zone_updater = ZoneUpdateRunner(zone_data['service'])
 							zone_updater.instance()
-							response = zone_updater.launchUpdate(zone_update_data)
+							response = zone_updater.launchUpdate(zone_update_data,
+								(self.config.getConfigValue('services'))[zone_data['service']])
 							logger.debug("Response from " + zone_data['service'] + " updater: " + response)
 						except Exception as e:
-							logger.error("Error updating '" + zone_update_data['zone'] +'.' + zone_update_data['domain'] + "' using " + zone_data['service']  + " service: " + str(e))
+							logger.error("Error updating '"+ zone_update_data['zone'] +'.'+zone_update_data['domain']
+								+"' using " + zone_data['service']  + " service: " + str(e))
 						
 			
+			sleep_time = self.config.getConfigValue('time_sleep')
 			logger.debug('Sleeping for ' + str(sleep_time) + ' seconds...')
-			time.sleep(int(sleep_time))
+			for x in range(1, int(sleep_time)):
+				time.sleep(1)
 
 	def getZone(self,domain,zone,ztype):
 		zone_resolution = []
-		
 		query_zone = zone +'.'+domain
-		
 		answers = []
 		
 		try:
@@ -95,7 +121,8 @@ class DaemonDDNS:
 			logger.info('Daemon finished')
 
 # Get log_level configuration
-log_level = Configuration().loadConfig('log_level')
+config = Configuration()
+log_level = config.getConfigValue('log_level')
 if not (log_level.isdigit()):
 	log_level = eval('logging.'+log_level)
 
@@ -108,7 +135,7 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 # Daemon launch
-ddns_daemon_app = DaemonDDNS()
+ddns_daemon_app = DaemonDDNS(config)
 ddns_daemon_runner = runner.DaemonRunner(ddns_daemon_app)
 ddns_daemon_runner.daemon_context.files_preserve=[handler.stream] # Keep log file opened
 ddns_daemon_runner.do_action()

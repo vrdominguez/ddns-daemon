@@ -1,13 +1,12 @@
 from Zone import ZoneUpdater
-from Configuration import Configuration 
 from urllib2 import urlopen
 import json
 
 class Dinaip(ZoneUpdater):
 	'Dinahosting zone updater'
-	def updateZone(self, params):
-		# Get srvice config
-		self.config = (Configuration().loadConfig('services'))['dinaip']
+	def updateZone(self, params, config):
+		# Service config
+		self.config = config 
 		
 		current_ip = self.zoneExists(params['domain'], params['zone'],params['type'])
 		

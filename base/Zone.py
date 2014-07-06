@@ -1,6 +1,6 @@
 class ZoneUpdater:
 	'Base class for zone updates'
-	def updateZone(self, params):
+	def updateZone(self, params, config):
 		raise NotImplementedError('Must be implemented for your zone')
 
 class ZoneUpdateRunner:
@@ -16,6 +16,9 @@ class ZoneUpdateRunner:
 		class_ = getattr(module, instance_zone)
 		self.zone_object = class_()
 	
-	def launchUpdate(self, params):
+	def launchUpdate(self, params, config):
 		# Run the zone updater
-		return self.zone_object.updateZone(params)
+		try:
+			return self.zone_object.updateZone(params, config)
+		except Exception as e:
+			return "ERROR: " +str(e)
