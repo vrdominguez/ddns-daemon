@@ -6,6 +6,7 @@ Dynamic DNS client daemon is a Dynamic DNS client written in Python
 Current supported providers
 ------------
  - [Dinahosting S. L.](https://dinahosting.com/)
+ - [cdmon.com](https://cdmon.com/)
 
 Instructions
 ------------
