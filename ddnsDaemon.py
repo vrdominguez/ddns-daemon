@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import logging, time, os, signal, sys, dns.resolver
+import logging, time, os, signal, sys,socket
 from daemon import runner #pip install python-daemon
 
 # add paths for base and command objects
@@ -101,17 +101,29 @@ class DaemonDDNS:
 		query_zone = zone +'.'+domain
 		answers = []
 		
-		try:
-			answers = dns.resolver.query(query_zone, ztype)
+		#try:
+		#	answers = dns.resolver.query(query_zone, ztype)
+		#except Exception as e:
+		#	if not len(str(e)):
+		#		logger.debug("Zone not defined in your conection's dns server")
+		#	else:
+		#		logger.error("Error getting zones: " + str(e)) 
+		#		
+		#
+		#for rdata in answers:
+		#	zone_resolution.append(str(rdata))
+
+                family = socket.AF_INET6 if ztype == 'AAAA' else socket.AF_INET
+
+                try:
+                    answers = socket.getaddrinfo(query_zone, None, family, socket.SOCK_STREAM)
 		except Exception as e:
 			if not len(str(e)):
 				logger.debug("Zone not defined in your conection's dns server")
 			else:
 				logger.error("Error getting zones: " + str(e)) 
-				
-		
-		for rdata in answers:
-			zone_resolution.append(str(rdata))
+                for addr in answers:
+                        zone_resolution.append(addr[4][0])
 		
 		return zone_resolution
 	
@@ -123,7 +135,7 @@ class DaemonDDNS:
 # Get log_level configuration
 config = Configuration()
 log_level = config.getConfigValue('log_level')
-if not (log_level.isdigit()):
+if not (int(log_level)):
 	log_level = eval('logging.'+log_level)
 
 # Logs configuration
